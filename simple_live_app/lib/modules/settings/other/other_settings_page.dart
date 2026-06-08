@@ -57,6 +57,38 @@ class OtherSettingsPage extends GetView<OtherSettingsController> {
           Padding(
             padding: AppStyle.edgeInsetsA12.copyWith(top: 24),
             child: Text(
+              "Twitch",
+              style: Get.textTheme.titleSmall,
+            ),
+          ),
+          SettingsCard(
+            child: Obx(
+              () => ListTile(
+                title: const Text("去广告代理"),
+                subtitle: Text(
+                  AppSettingsController.instance.twitchProxy.value.isEmpty
+                      ? "未设置（直连，可能含广告）"
+                      : AppSettingsController.instance.twitchProxy.value,
+                  style: Get.textTheme.bodySmall!.copyWith(color: Colors.grey),
+                ),
+                trailing:
+                    const Icon(Icons.chevron_right, color: Colors.grey),
+                onTap: () async {
+                  var result = await Utils.showEditTextDialog(
+                    AppSettingsController.instance.twitchProxy.value,
+                    title: "Twitch 去广告代理",
+                    hintText: "TTV-LOL 兼容代理地址，留空=直连",
+                  );
+                  if (result != null) {
+                    AppSettingsController.instance.setTwitchProxy(result);
+                  }
+                },
+              ),
+            ),
+          ),
+          Padding(
+            padding: AppStyle.edgeInsetsA12.copyWith(top: 24),
+            child: Text(
               "播放器高级设置",
               style: Get.textTheme.titleSmall,
             ),

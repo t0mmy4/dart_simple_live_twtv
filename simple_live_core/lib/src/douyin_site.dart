@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:isolate';
 import 'dart:math';
 
 import 'package:simple_live_core/simple_live_core.dart';
@@ -64,6 +65,13 @@ class DouyinSite implements LiveSite {
     }
   }
 
+  /// 执行抖音 a_bogus 签名(QuickJS 字节码)。放到全新 isolate 执行：
+  /// ① 不阻塞 UI；② 全新线程栈较深处尚未占用，留给 QuickJS 执行的 C 栈最充裕。
+  /// 注：签名脚本已预编译为字节码，加载不再解析(避免解析期深递归爆栈)；
+  /// 执行期所需 C 栈取决于运行平台给该线程分配的栈大小。
+  Future<String> _signedUrl(String url) =>
+      Isolate.run(() => DouyinSign.getAbogusUrl(url, kDefaultUserAgent));
+
   @override
   Future<List<LiveCategory>> getCategores() async {
     List<LiveCategory> categories = [];
@@ -73,20 +81,13 @@ class DouyinSite implements LiveSite {
       header: await getRequestHeaders(),
     );
 
-    var renderData =
-        RegExp(
-          r'\{\\"pathname\\":\\"\/\\",\\"categoryData.*?\]\\n',
-        ).firstMatch(result)?.group(0) ??
-        "";
-    var renderDataJson = json.decode(
-      renderData
-          .trim()
-          .replaceAll('\\"', '"')
-          .replaceAll(r"\\", r"\")
-          .replaceAll(']\\n', ""),
-    );
+    // 抖音首页已改用 React Server Components(Flight) 格式承载数据，
+    // categoryData 被包在 ["$","$L9",null,{...}] 之类结构里。旧的整段正则会
+    // 越界匹配到 Flight 控制标记(如 "$undefined")导致 JSON 解析失败。这里改为
+    // 定位 categoryData 后按括号配对，截取出干净的 JSON 数组再解析。
+    var categoryData = _extractCategoryData(result);
 
-    for (var item in renderDataJson["categoryData"]) {
+    for (var item in categoryData) {
       List<LiveSubCategory> subs = [];
       var id = '${item["partition"]["id_str"]},${item["partition"]["type"]}';
       for (var subItem in item["sub_partition"]) {
@@ -116,6 +117,62 @@ class DouyinSite implements LiveSite {
       categories.add(category);
     }
     return categories;
+  }
+
+  /// 从抖音首页 HTML 中提取 categoryData 数组。
+  /// 首页为转义后的 JSON 文本(形如 \"categoryData\":[...])，先反转义再用
+  /// 括号配对截取出完整数组，避免被后续的 Flight 数据干扰导致解析失败。
+  List _extractCategoryData(String html) {
+    var keyIndex = html.indexOf("categoryData");
+    if (keyIndex < 0) {
+      throw Exception("抖音首页解析失败：未找到 categoryData");
+    }
+    // 反转义从 categoryData 起的片段：\" -> " , \\ -> \
+    var unescaped = html
+        .substring(keyIndex)
+        .replaceAll('\\"', '"')
+        .replaceAll(r"\\", r"\");
+    var start = unescaped.indexOf("[");
+    if (start < 0) {
+      throw Exception("抖音首页解析失败：categoryData 缺少数组");
+    }
+    var end = _matchBracket(unescaped, start);
+    if (end < 0) {
+      throw Exception("抖音首页解析失败：categoryData 数组不完整");
+    }
+    return json.decode(unescaped.substring(start, end + 1)) as List;
+  }
+
+  /// 在干净的 JSON 文本中，从 [start] 处的 '[' 或 '{' 找到与之配对的右括号下标。
+  /// 会正确跳过字符串字面量内部的括号；找不到时返回 -1。
+  int _matchBracket(String s, int start) {
+    var open = s[start];
+    var close = open == "[" ? "]" : "}";
+    var depth = 0;
+    var inStr = false;
+    var esc = false;
+    for (var i = start; i < s.length; i++) {
+      var c = s[i];
+      if (inStr) {
+        if (esc) {
+          esc = false;
+        } else if (c == "\\") {
+          esc = true;
+        } else if (c == '"') {
+          inStr = false;
+        }
+      } else {
+        if (c == '"') {
+          inStr = true;
+        } else if (c == open) {
+          depth++;
+        } else if (c == close) {
+          depth--;
+          if (depth == 0) return i;
+        }
+      }
+    }
+    return -1;
   }
 
   @override
@@ -154,7 +211,7 @@ class DouyinSite implements LiveSite {
         "req_from": '2',
       },
     );
-    var requestUrl = DouyinSign.getAbogusUrl(uri.toString(), kDefaultUserAgent);
+    var requestUrl = await _signedUrl(uri.toString());
 
     var result = await HttpClient.instance.getJson(
       requestUrl,
@@ -209,7 +266,7 @@ class DouyinSite implements LiveSite {
         "req_from": '2',
       },
     );
-    var requestUrl = DouyinSign.getAbogusUrl(uri.toString(), kDefaultUserAgent);
+    var requestUrl = await _signedUrl(uri.toString());
 
     var result = await HttpClient.instance.getJson(
       requestUrl,
@@ -503,7 +560,7 @@ class DouyinSite implements LiveSite {
         "msToken": "",
       },
     );
-    var requestUrl = DouyinSign.getAbogusUrl(uri.toString(), kDefaultUserAgent);
+    var requestUrl = await _signedUrl(uri.toString());
 
     var result = await HttpClient.instance.getJson(
       requestUrl,
@@ -642,6 +699,25 @@ class DouyinSite implements LiveSite {
     String keyword, {
     int page = 1,
   }) async {
+    var data = await _searchLiveRaw(keyword, page);
+    var items = <LiveRoomItem>[];
+    for (var item in data) {
+      var itemData = json.decode(item["lives"]["rawdata"].toString());
+      var roomItem = LiveRoomItem(
+        roomId: itemData["owner"]["web_rid"].toString(),
+        title: itemData["title"].toString(),
+        cover: itemData["cover"]["url_list"][0].toString(),
+        userName: itemData["owner"]["nickname"].toString(),
+        online: int.tryParse(itemData["stats"]["total_user"].toString()) ?? 0,
+      );
+      items.add(roomItem);
+    }
+    return LiveSearchRoomResult(hasMore: items.length >= 10, items: items);
+  }
+
+  /// 抖音直播搜索底层请求。必须用 a_bogus 签名，否则会被风控返回 blocked。
+  /// 返回 result["data"] 列表。
+  Future<List> _searchLiveRaw(String keyword, int page) async {
     String serverUrl = "https://www.douyin.com/aweme/v1/web/live/search/";
     var uri = Uri.parse(serverUrl).replace(
       scheme: "https",
@@ -682,22 +758,27 @@ class DouyinSite implements LiveSite {
         "webid": "7382872326016435738",
       },
     );
-    //var requlestUrl = await getAbogusUrl(uri.toString());
-    var requlestUrl = uri.toString();
-    var headResp = await HttpClient.instance.head(
-      'https://live.douyin.com',
-      header: headers,
-    );
+    // 关键：用 a_bogus 签名（与推荐/分类一致）。之前此处未签名，导致被风控拦截。
+    var requlestUrl = await _signedUrl(uri.toString());
+
+    // 抖音直播搜索接口已要求登录（匿名访问返回 status_code 2483
+    // “请先登录，再继续搜索吧”）。优先使用用户在「账号管理 → 抖音」配置的
+    // 已登录 Cookie；未配置则退回匿名 ttwid（此时多半会被要求登录）。
     var dyCookie = "";
-    headResp.headers["set-cookie"]?.forEach((element) {
-      var cookie = element.split(";")[0];
-      if (cookie.contains("ttwid")) {
-        dyCookie += "$cookie;";
-      }
-      if (cookie.contains("__ac_nonce")) {
-        dyCookie += "$cookie;";
-      }
-    });
+    if (cookie.isNotEmpty) {
+      dyCookie = cookie;
+    } else {
+      var headResp = await HttpClient.instance.head(
+        'https://live.douyin.com',
+        header: headers,
+      );
+      headResp.headers["set-cookie"]?.forEach((element) {
+        var c = element.split(";")[0];
+        if (c.contains("ttwid") || c.contains("__ac_nonce")) {
+          dyCookie += "$c;";
+        }
+      });
+    }
 
     var result = await HttpClient.instance.getJson(
       requlestUrl,
@@ -723,19 +804,20 @@ class DouyinSite implements LiveSite {
     if (result == "" || result == 'blocked') {
       throw Exception("抖音直播搜索被限制，请稍后再试");
     }
-    var items = <LiveRoomItem>[];
-    for (var item in result["data"] ?? []) {
-      var itemData = json.decode(item["lives"]["rawdata"].toString());
-      var roomItem = LiveRoomItem(
-        roomId: itemData["owner"]["web_rid"].toString(),
-        title: itemData["title"].toString(),
-        cover: itemData["cover"]["url_list"][0].toString(),
-        userName: itemData["owner"]["nickname"].toString(),
-        online: int.tryParse(itemData["stats"]["total_user"].toString()) ?? 0,
-      );
-      items.add(roomItem);
+    if (result is Map) {
+      var statusCode = result["status_code"];
+      // status_code 2483 = 需要登录；其它非 0 也视为失败，向上抛出可读信息，
+      // 避免静默返回空列表让用户误以为“无结果”。
+      if (statusCode != null && statusCode != 0) {
+        var msg = result["status_msg"]?.toString() ?? "";
+        if (statusCode == 2483) {
+          throw Exception("抖音搜索需要登录：请在「账号管理 → 抖音」填入已登录的 Cookie。（$msg）");
+        }
+        throw Exception("抖音搜索失败（$statusCode）：$msg");
+      }
+      return (result["data"] as List?) ?? [];
     }
-    return LiveSearchRoomResult(hasMore: items.length >= 10, items: items);
+    return [];
   }
 
   @override
@@ -743,7 +825,30 @@ class DouyinSite implements LiveSite {
     String keyword, {
     int page = 1,
   }) async {
-    throw Exception("抖音暂不支持搜索主播，请直接搜索直播间");
+    // 抖音 Web 没有公开、可直连的"用户/主播搜索"接口；这里复用直播搜索，
+    // 返回与关键词匹配且【正在直播】的主播（取每个直播间的房主）。
+    // 局限：搜不到当前未开播的主播。
+    var data = await _searchLiveRaw(keyword, page);
+    var items = <LiveAnchorItem>[];
+    for (var item in data) {
+      var itemData = json.decode(item["lives"]["rawdata"].toString());
+      var owner = itemData["owner"] ?? {};
+      String avatar = "";
+      try {
+        avatar =
+            (owner["avatar_thumb"]?["url_list"] as List?)?.first?.toString() ??
+                "";
+      } catch (_) {}
+      items.add(
+        LiveAnchorItem(
+          roomId: owner["web_rid"].toString(),
+          avatar: avatar,
+          userName: owner["nickname"].toString(),
+          liveStatus: true,
+        ),
+      );
+    }
+    return LiveSearchAnchorResult(hasMore: items.length >= 10, items: items);
   }
 
   @override

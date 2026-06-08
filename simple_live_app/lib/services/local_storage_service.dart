@@ -120,6 +120,9 @@ class LocalStorageService extends GetxService {
   /// 抖音cookie
   static const String kDouyinCookie = "DouyinCookie";
 
+  /// Twitch 去广告代理（TTV-LOL 兼容），留空=直连
+  static const String kTwitchProxy = "TwitchProxy";
+
   ///主题色
   static const String kStyleColor = "kStyleColor";
 

@@ -959,6 +959,9 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
       naviteUrl =
           "douyulink://?type=90001&schemeUrl=douyuapp%3A%2F%2Froom%3FliveType%3D0%26rid%3D${detail.value?.roomId}";
       webUrl = "https://www.douyu.com/${detail.value?.roomId}";
+    } else if (site.id == Constant.kTwitch) {
+      naviteUrl = "https://www.twitch.tv/${detail.value?.roomId}";
+      webUrl = "https://www.twitch.tv/${detail.value?.roomId}";
     }
     try {
       await launchUrlString(naviteUrl, mode: LaunchMode.externalApplication);

@@ -473,6 +473,20 @@ class SettingsPage extends GetView<SettingsController> {
           onTap: () {
             SmartDialog.showToast("无需登录抖音，您可以直接观看直播");
           },
+        ),
+        AppStyle.vGap24,
+        HighlightListTile(
+          focusNode: AppFocusNode(),
+          title: "Twitch账号",
+          subtitle: "无需登录",
+          leading: Image.asset(
+            "assets/images/twitch.png",
+            width: 64.w,
+            height: 64.w,
+          ),
+          onTap: () {
+            SmartDialog.showToast("无需登录Twitch，您可以直接观看直播");
+          },
         )
       ],
     );

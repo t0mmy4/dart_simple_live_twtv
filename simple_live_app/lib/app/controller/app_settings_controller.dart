@@ -4,6 +4,7 @@ import 'package:simple_live_app/app/constant.dart';
 import 'package:simple_live_app/app/log.dart';
 import 'package:simple_live_app/app/sites.dart';
 import 'package:simple_live_app/services/local_storage_service.dart';
+import 'package:simple_live_core/simple_live_core.dart';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -18,6 +19,9 @@ class AppSettingsController extends GetxController {
   var themeMode = 0.obs;
 
   var firstRun = false;
+
+  /// Twitch 去广告代理（TTV-LOL 兼容），留空=直连
+  var twitchProxy = "".obs;
 
   @override
   void onInit() {
@@ -152,6 +156,10 @@ class AppSettingsController extends GetxController {
 
     updateFollowThreadCount.value = LocalStorageService.instance
         .getValue(LocalStorageService.kUpdateFollowThreadCount, 0);  // 默认 0 = 自动
+
+    twitchProxy.value = LocalStorageService.instance
+        .getValue(LocalStorageService.kTwitchProxy, "");
+    _applyTwitchProxy();
 
     initSiteSort();
     initHomeSort();
@@ -411,6 +419,21 @@ class AppSettingsController extends GetxController {
       LocalStorageService.kSiteSort,
       siteSort.join(","),
     );
+  }
+
+  /// 将 Twitch 去广告代理注入到核心库站点实例
+  void _applyTwitchProxy() {
+    try {
+      (Sites.allSites[Constant.kTwitch]!.liveSite as TwitchSite).proxyUrl =
+          twitchProxy.value;
+    } catch (_) {}
+  }
+
+  void setTwitchProxy(String value) {
+    twitchProxy.value = value.trim();
+    LocalStorageService.instance
+        .setValue(LocalStorageService.kTwitchProxy, twitchProxy.value);
+    _applyTwitchProxy();
   }
 
   RxList<String> homeSort = RxList<String>();

@@ -1,7 +1,9 @@
 import 'dart:math';
-import 'package:dart_quickjs/dart_quickjs.dart';
+import 'dart:typed_data';
 import 'package:simple_live_core/simple_live_core.dart';
 import 'package:crypto/crypto.dart';
+import 'quickjs_bytecode.dart';
+import 'sign_bytecode.g.dart';
 
 class DouyinSign {
   static const kABogus = r'''
@@ -10648,43 +10650,53 @@ function getMSSDKSignature(msStub, userAgent) {
 ''';
 
   static const String defaultUserAgent = DouyinSite.kDefaultUserAgent;
+
+  // kABogus / kWebMsSDK 的预编译字节码（base64 解码后缓存，避免每次签名都重复解码）。
+  static Uint8List? _abogusBc;
+  static Uint8List get _abogusBytecode =>
+      _abogusBc ??= decodeBytecodeB64(kABogusBytecodeB64);
+  static Uint8List? _webMsSdkBc;
+  static Uint8List get _webMsSdkBytecode =>
+      _webMsSdkBc ??= decodeBytecodeB64(kWebMsSDKBytecodeB64);
+
   static String getAbogusUrl(String url, String userAgent) {
-    JsRuntime flutterJs = JsRuntime(
-      memoryLimit: 4 * 1024 * 1024,
-      maxStackSize: 64 * 1024,
-    );
     final msToken = generateMsToken(107);
     var params = ('$url&msToken=$msToken').split('?')[1];
     var query = params.contains("?") ? params.split("?")[1] : params;
-    var jsCode = kABogus;
-    flutterJs.eval(jsCode);
-    // 执行getABogus函数
-    var aBogus = flutterJs.eval("getABogus('$query', '$userAgent')");
-    flutterJs.dispose();
+
+    // 加载 kABogus 字节码（跳过解析，避免深递归爆栈），再执行极小的 getABogus 调用。
+    final js = QuickJsBytecode();
+    String aBogus;
+    try {
+      js.evalBytecode(_abogusBytecode);
+      aBogus = js.evalToString("getABogus('$query', '$userAgent')");
+    } finally {
+      js.dispose();
+    }
     var newUrl =
         '$url&msToken=${Uri.encodeComponent(msToken)}&a_bogus=${Uri.encodeComponent(aBogus)}';
     return newUrl;
   }
 
   static String getSignature(String roomId, String uniqueId) {
-    JsRuntime flutterJs = JsRuntime(
-      memoryLimit: 4 * 1024 * 1024,
-      maxStackSize: 128 * 1024,
-    );
-
-    flutterJs.eval(kWebMsSDK);
-    var msStub = getMsStub(roomId, uniqueId);
-    var signature = flutterJs.eval(
-      "getMSSDKSignature('$msStub','$defaultUserAgent')",
-    );
-    // 如果signature中包含-或=，重新生成
-    while (signature.contains('-') || signature.contains('=')) {
-      signature = flutterJs.eval(
+    // 加载 kWebMsSDK 字节码（跳过解析），再执行 getMSSDKSignature 调用。
+    final js = QuickJsBytecode();
+    try {
+      js.evalBytecode(_webMsSdkBytecode);
+      var msStub = getMsStub(roomId, uniqueId);
+      var signature = js.evalToString(
         "getMSSDKSignature('$msStub','$defaultUserAgent')",
       );
+      // 如果signature中包含-或=，重新生成
+      while (signature.contains('-') || signature.contains('=')) {
+        signature = js.evalToString(
+          "getMSSDKSignature('$msStub','$defaultUserAgent')",
+        );
+      }
+      return signature;
+    } finally {
+      js.dispose();
     }
-    flutterJs.dispose();
-    return signature;
   }
 
   static String getMsStub(String roomId, String uniqueId) {

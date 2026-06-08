@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 import 'package:simple_live_core/simple_live_core.dart';
 import 'package:simple_live_core/src/common/web_socket_util.dart';
 import 'package:simple_live_core/src/scripts/douyin_sign.dart';
@@ -88,7 +89,10 @@ class DouyinDanmaku implements LiveDanmaku {
       },
     );
 
-    var sign = DouyinSign.getSignature(danmakuArgs.roomId, danmakuArgs.userId);
+    // QuickJS 签名放到独立 isolate 栈顶执行，避免 UI 线程小栈递归溢出导致原生崩溃。
+    var rid = danmakuArgs.roomId;
+    var uid = danmakuArgs.userId;
+    var sign = await Isolate.run(() => DouyinSign.getSignature(rid, uid));
 
     var url = "$uri&signature=$sign";
     var backupUrl = url.replaceAll("webcast3-ws-web-lq", "webcast5-ws-web-lf");

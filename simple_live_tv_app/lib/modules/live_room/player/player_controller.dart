@@ -30,6 +30,14 @@ mixin PlayerMixin {
   Future<void> initializePlayer() async {
     var pp = player.platform as NativePlayer;
 
+    // 允许在系统配置了 HTTP 代理(http_proxy/https_proxy)时打开 HLS 流(如 Twitch)。
+    // 默认 protocol_whitelist 不含 'httpproxy'，存在代理时打开 m3u8 会失败并退化为
+    // 逐个播放 fMP4 分片导致只有弹幕没有画面。加入 httpproxy 修复。
+    const lavfOptions =
+        'protocol_whitelist=[file,crypto,data,http,https,tcp,tls,udp,rtp,httpproxy]';
+    await pp.setProperty('stream-lavf-o', lavfOptions);
+    await pp.setProperty('demuxer-lavf-o', lavfOptions);
+
     // media_kit 仓库更新导致的问题，临时解决办法
     if (Platform.isAndroid) {
       await pp.setProperty('force-seekable', 'yes');

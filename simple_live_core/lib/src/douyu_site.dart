@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:isolate';
 import 'dart:math';
 
 import 'package:simple_live_core/src/common/http_client.dart';
@@ -238,6 +239,10 @@ class DouyuSite implements LiveSite {
       }
     }
 
+    // 在独立 isolate 中执行斗鱼签名(QuickJS)，避免在 Flutter UI 线程的小栈上递归
+    // 溢出 C 栈导致原生崩溃(打开斗鱼直播间闪退)。
+    var ridStr = roomInfo["room_id"].toString();
+    var signData = await Isolate.run(() => DouyuSign.getSign(crptext, ridStr));
     return LiveRoomDetail(
       cover: roomInfo["room_pic"].toString(),
       online: int.tryParse(roomInfo["room_biz_all"]["hot"].toString()) ?? 0,
@@ -249,7 +254,7 @@ class DouyuSite implements LiveSite {
       notice: "",
       status: roomInfo["show_status"] == 1 && roomInfo["videoLoop"] != 1,
       danmakuData: roomInfo["room_id"].toString(),
-      data: DouyuSign.getSign(crptext, roomInfo["room_id"].toString()),
+      data: signData,
       url: "https://www.douyu.com/$roomId",
       isRecord: roomInfo["videoLoop"] == 1,
       showTime: showTime,

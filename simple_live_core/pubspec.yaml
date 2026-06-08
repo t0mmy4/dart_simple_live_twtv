@@ -17,6 +17,7 @@ dependencies:
   tars_dart:
     path: ./packages/tars_dart
   fixnum: ^1.1.0
+  ffi: ^2.1.0
   dart_quickjs:
     git:
       url: https://github.com/xiaoyaocz/dart_quickjs

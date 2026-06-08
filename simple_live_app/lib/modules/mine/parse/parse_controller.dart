@@ -155,6 +155,11 @@ class ParseController extends GetxController {
       var location = await getLocation(u);
       return await parse(location);
     }
+    if (url.contains("twitch.tv")) {
+      var regExp = RegExp(r"twitch\.tv/(\w+)");
+      id = regExp.firstMatch(url)?.group(1) ?? "";
+      return [id, Sites.allSites[Constant.kTwitch]!];
+    }
 
     return [];
   }

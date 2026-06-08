@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:simple_live_app/app/utils.dart';
+import 'package:simple_live_app/app/controller/app_settings_controller.dart';
 import 'package:simple_live_app/routes/route_path.dart';
 import 'package:simple_live_app/services/bilibili_account_service.dart';
 import 'package:simple_live_app/services/douyin_account_service.dart';
@@ -164,5 +165,20 @@ class AccountController extends GetxController {
         ],
       ),
     );
+  }
+
+  /// Twitch 无需登录；这里管理可选的"去广告代理"（与设置页共用一份配置）。
+  void twitchTap() async {
+    var result = await Utils.showEditTextDialog(
+      AppSettingsController.instance.twitchProxy.value,
+      title: "Twitch 去广告代理",
+      hintText: "TTV-LOL 兼容代理地址，留空=直连",
+    );
+    if (result != null) {
+      AppSettingsController.instance.setTwitchProxy(result.trim());
+      SmartDialog.showToast(
+        result.trim().isEmpty ? "已清除代理，直连 Twitch" : "已保存 Twitch 代理",
+      );
+    }
   }
 }

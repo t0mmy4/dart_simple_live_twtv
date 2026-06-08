@@ -3,3 +3,7 @@ simple_live_tv_app/.vscode/settings.json
 
 # macOS Spotlight Search index file
 *.DS_Store
+
+# Debug artifacts (crash core dumps, stray logs) — never commit
+core.[0-9]*
+*.log

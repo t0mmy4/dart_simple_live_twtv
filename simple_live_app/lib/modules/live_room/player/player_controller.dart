@@ -39,6 +39,15 @@ mixin PlayerMixin {
   /// 初始化播放器并设置 ao 参数
   Future<void> initializePlayer() async {
     var pp = player.platform as NativePlayer;
+    // 允许在系统配置了 HTTP 代理(http_proxy/https_proxy)时打开 HLS 流(如 Twitch)。
+    // mpv 给 HLS 解复用器的默认 protocol_whitelist 不含 'httpproxy'，存在代理时
+    // 打开 m3u8 会报 "Protocol 'httpproxy' not on whitelist" 并退化为逐个播放
+    // fMP4 分片，导致只有弹幕没有画面。加入 httpproxy 即可正常播放。
+    // 值含逗号，需用 mpv 的 [...] 引用语法。
+    const lavfOptions =
+        'protocol_whitelist=[file,crypto,data,http,https,tcp,tls,udp,rtp,httpproxy]';
+    await pp.setProperty('stream-lavf-o', lavfOptions);
+    await pp.setProperty('demuxer-lavf-o', lavfOptions);
     // 设置音频输出驱动
     if (AppSettingsController.instance.customPlayerOutput.value) {
       if (player.platform is NativePlayer) {
