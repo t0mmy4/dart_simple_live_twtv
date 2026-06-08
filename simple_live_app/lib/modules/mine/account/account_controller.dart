@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:simple_live_app/app/utils.dart';
-import 'package:simple_live_app/app/controller/app_settings_controller.dart';
 import 'package:simple_live_app/routes/route_path.dart';
 import 'package:simple_live_app/services/bilibili_account_service.dart';
 import 'package:simple_live_app/services/douyin_account_service.dart';
@@ -151,13 +150,11 @@ class AccountController extends GetxController {
                 DouyinAccountService.instance.clearCookie();
                 SmartDialog.showToast("已清除自定义 Cookie，将使用默认 ttwid");
               } else {
-                // 如果用户只输入了 ttwid 值，自动添加 "ttwid=" 前缀
-                var cookie = input;
-                if (!input.startsWith('ttwid=')) {
-                  cookie = 'ttwid=$input';
-                }
+                // 裸 ttwid 值（不含 =）才补 "ttwid=" 前缀；
+                // 含 = 视为完整 Cookie（如登录 Cookie），原样保存。
+                var cookie = input.contains('=') ? input : 'ttwid=$input';
                 DouyinAccountService.instance.setCookie(cookie);
-                SmartDialog.showToast("ttwid 已保存");
+                SmartDialog.showToast("已保存");
               }
             },
             child: const Text("确定"),
@@ -165,20 +162,5 @@ class AccountController extends GetxController {
         ],
       ),
     );
-  }
-
-  /// Twitch 无需登录；这里管理可选的"去广告代理"（与设置页共用一份配置）。
-  void twitchTap() async {
-    var result = await Utils.showEditTextDialog(
-      AppSettingsController.instance.twitchProxy.value,
-      title: "Twitch 去广告代理",
-      hintText: "TTV-LOL 兼容代理地址，留空=直连",
-    );
-    if (result != null) {
-      AppSettingsController.instance.setTwitchProxy(result.trim());
-      SmartDialog.showToast(
-        result.trim().isEmpty ? "已清除代理，直连 Twitch" : "已保存 Twitch 代理",
-      );
-    }
   }
 }

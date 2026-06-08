@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:simple_live_app/app/app_style.dart';
-import 'package:simple_live_app/app/controller/app_settings_controller.dart';
 import 'package:simple_live_app/modules/mine/account/account_controller.dart';
 import 'package:simple_live_app/services/bilibili_account_service.dart';
 import 'package:simple_live_app/services/douyin_account_service.dart';
@@ -70,29 +69,12 @@ class AccountPage extends GetView<AccountController> {
               ),
               title: const Text("抖音直播"),
               subtitle: Text(DouyinAccountService.instance.hasCookie.value
-                  ? "已自定义（${DouyinAccountService.instance.cookie.length} 字符）"
+                  ? "已自定义 ttwid（点击修改）"
                   : "使用默认 ttwid"),
               trailing: DouyinAccountService.instance.hasCookie.value
                   ? const Icon(Icons.delete_outline)
                   : const Icon(Icons.chevron_right),
               onTap: controller.douyinTap,
-            ),
-          ),
-          Obx(
-            () => ListTile(
-              leading: Image.asset(
-                'assets/images/twitch.png',
-                width: 36,
-                height: 36,
-              ),
-              title: const Text("Twitch"),
-              subtitle: Text(
-                AppSettingsController.instance.twitchProxy.value.isEmpty
-                    ? "无需登录（可选去广告代理）"
-                    : "去广告代理：${AppSettingsController.instance.twitchProxy.value}",
-              ),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: controller.twitchTap,
             ),
           ),
         ],

@@ -815,7 +815,17 @@ class DouyinSite implements LiveSite {
         }
         throw Exception("抖音搜索失败（$statusCode）：$msg");
       }
-      return (result["data"] as List?) ?? [];
+      var list = (result["data"] as List?) ?? [];
+      // 抖音对"搜索"有独立风控：即便已登录、a_bogus 正确，仍可能返回
+      // status_code=0 但 data 为空、search_nil_info.search_nil_type=="verify_check"
+      // （要求设备验证/验证码）。接口方式无法绕过，给出可读提示而非静默空列表。
+      if (list.isEmpty) {
+        var nil = result["search_nil_info"];
+        if (nil is Map && nil["search_nil_type"] == "verify_check") {
+          throw Exception("抖音搜索被风控拦截（verify_check），网页接口无法绕过。");
+        }
+      }
+      return list;
     }
     return [];
   }

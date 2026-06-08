@@ -24,6 +24,27 @@
 
 - 抖音直播
 
+- Twitch `本分支新增`
+
+## 本分支（Fork）说明
+
+> 本分支基于 [xiaoyaocz/dart_simple_live](https://github.com/xiaoyaocz/dart_simple_live)，在其之上新增与修复如下：
+
+### 新增 Twitch 直播
+- 核心库新增 `TwitchSite` 与 Twitch 弹幕（IRC over WebSocket），App / TV / 控制台均已接入分类、热门、搜索、播放与弹幕。
+- 无需登录即可观看；可在「设置 → 其他设置」配置可选的「去广告代理」（TTV‑LOL 兼容，默认直连）。
+- 支持粘贴 `twitch.tv/<频道>` 链接解析直接打开。
+
+### 修复抖音 / 斗鱼在部分设备闪退
+- 抖音 `a_bogus`、斗鱼签名脚本改为**预编译 QuickJS 字节码**加载（运行时不再深度解析脚本），修复部分设备（线程栈较小）打开抖音直播列表 / 斗鱼直播间时的原生闪退。
+
+### 抖音搜索改为「网页内搜索」
+- 抖音搜索接口已被风控拦截（`verify_check`，根因是 `msToken` 无法在客户端伪造），登录也无法从接口绕过；改为在 App 内打开抖音网页搜索结果页，点击其中的直播间即在原生播放器中打开。
+
+### 其它
+- 「检查更新」指向本仓库（`t0mmy4/dart_simple_live_twtv`）。
+- 账号管理：抖音保留 ttwid 配置（用于解锁画质）；Twitch 的「去广告代理」位于「设置 → 其他设置」。
+
 ## APP支持平台
 
 - [x] Android
@@ -42,7 +63,7 @@
 
 ## 环境
 
-Flutter : `3.38`
+Flutter : `3.38`（本分支签名脚本字节码依赖 native assets，建议使用 `3.44+` 并启用 `--enable-native-assets` 编译）
 
 ## 参考及引用
 

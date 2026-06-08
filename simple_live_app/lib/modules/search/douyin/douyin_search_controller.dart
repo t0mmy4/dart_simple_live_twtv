@@ -10,6 +10,10 @@ import 'package:simple_live_core/simple_live_core.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 
 class DouyinSearchController extends BaseController {
+  /// 用桌面 UA：抖音桌面版搜索结果稳定、可点击跳转直播间。
+  /// （如抖音要求登录，可直接在该搜索页内登录，Cookie 会留在 WebView。）
+  static const String userAgent = DouyinSite.kDefaultUserAgent;
+
   InAppWebViewController? webViewController;
 
   void onWebViewCreated(InAppWebViewController controller) {
